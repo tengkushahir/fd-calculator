@@ -1,6 +1,6 @@
 // Gaji Planner service worker: works fully offline after the first visit.
 // Bump VERSION whenever you upload a new index.html so phones pick up the update.
-const VERSION = 'gaji-v2';
+const VERSION = 'gaji-v3';
 const CORE = ['./', './index.html', './manifest.json', './icon-192.png', './icon-512.png', './icon-maskable-512.png', './apple-touch-icon.png'];
 
 self.addEventListener('install', e => {

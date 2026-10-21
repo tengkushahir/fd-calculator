@@ -164,6 +164,10 @@ input:focus-visible,select:focus-visible,button:focus-visible,.chip input:focus-
 .item-row{display:grid;grid-template-columns:minmax(0,1fr) 8.5em;gap:8px}
 .item-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(118px,1fr));gap:8px}
 .item-foot{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+.item-head{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.btn.add{background:var(--accent-soft);color:var(--accent);border:1.5px dashed var(--accent)}
+.preset{font:inherit;font-size:13px;font-weight:500;padding:6px 12px;border-radius:99px;border:1px solid var(--line);background:var(--surface);color:var(--ink);cursor:pointer}
+.preset:hover{border-color:var(--accent);color:var(--accent)}
 .check-inline{display:flex;align-items:center;gap:8px;font-size:14px;cursor:pointer}
 .check-inline input{width:18px;height:18px;accent-color:var(--accent)}
 .tag{font-size:12px;font-weight:700;padding:2px 8px;border-radius:99px;background:var(--bad-soft);color:var(--bad)}
@@ -285,7 +289,8 @@ if(t==='auto')document.documentElement.removeAttribute('data-theme');else docume
         <label><input type="radio" name="mode" value="net" id="mode-net"><span>Take-home (net)</span></label>
       </div>
       <div class="items" id="income-list"></div>
-      <button class="btn ghost" type="button" id="add-income">+ Add salary or allowance</button>
+      <button class="btn add" type="button" id="add-income">+ Add another income</button>
+      <div class="f"><span>Quick add</span><div class="chips" id="income-presets"></div></div>
     </div>
 
     <div class="card" id="ded-card">
@@ -391,6 +396,9 @@ const GROUPS=[
   {type:'bill',title:'Fixed bills',seg:'--seg-bill',note:'Insurance or takaful, utilities, phone, family support, subscriptions.',add:'+ Add fixed bill'},
   {type:'set',title:'Set-asides',seg:'--seg-set',note:'Yearly costs split monthly: road tax, car insurance, festive season, school fees.',add:'+ Add set-aside'}
 ];
+const FREQ={monthly:['Monthly',1],weekly:['Weekly',52/12],yearly:['Yearly',1/12]};
+const PRESETS=[['Basic salary',true],['Fixed allowance',false],['Travel allowance',false],['Phone allowance',false],['Housing allowance',false],
+  ['Overtime',false],['Commission / incentive',false],['Side income',false],['Rental income',false],['Yearly bonus',false,'yearly']];
 const $=s=>document.querySelector(s);
 const uid=()=>Math.random().toString(36).slice(2,10);
 const pad=n=>String(n).padStart(2,'0');
@@ -399,6 +407,7 @@ const parseYmd=s=>{const p=String(s).split('-').map(Number);return new Date(p[0]
 const addDays=(d,n)=>new Date(d.getFullYear(),d.getMonth(),d.getDate()+n);
 function todayDate(){const n=new Date();return new Date(n.getFullYear(),n.getMonth(),n.getDate())}
 function num(v){const n=parseFloat(String(v==null?'':v).replace(/,/g,''));return isFinite(n)?n:0}
+function monthlyOf(i){return num(i.amount)*((FREQ[i.freq]||FREQ.monthly)[1])}
 function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 function amt(n,dp){dp=dp==null?2:dp;return Math.abs(n).toLocaleString('en-MY',{minimumFractionDigits:dp,maximumFractionDigits:dp})}
 function money(n,dp){return (n<-0.004?'−':'')+'RM '+amt(n,dp)}
@@ -460,8 +469,8 @@ state=load();
 
 function calc(){
   const t=todayDate(),c=cycle(state.payday,t),isGross=state.mode!=='net';
-  const gross=state.income.reduce((a,i)=>a+num(i.amount),0);
-  const epfBase=state.income.filter(i=>i.epf).reduce((a,i)=>a+num(i.amount),0);
+  const gross=state.income.reduce((a,i)=>a+monthlyOf(i),0);
+  const epfBase=state.income.filter(i=>i.epf).reduce((a,i)=>a+monthlyOf(i),0);
   const epf=isGross?epfBase*num(state.epfRate)/100:0;
   const ded=isGross?epf+num(state.socso)+num(state.eis)+num(state.pcb)+num(state.otherDed):0;
   const net=gross-ded;
@@ -544,13 +553,17 @@ function renderExpenses(m){
 function renderIncome(){
   const g=state.mode!=='net';
   $('#mode-gross').checked=g;$('#mode-net').checked=!g;$('#ded-card').hidden=!g;
-  $('#income-list').innerHTML=state.income.map(i=>`<div class="item">
+  $('#income-list').innerHTML=state.income.length?state.income.map((i,idx)=>{const fq=i.freq||'monthly';
+    const opts=Object.keys(FREQ).map(k=>`<option value="${k}" ${fq===k?'selected':''}>${FREQ[k][0]}</option>`).join('');
+    return `<div class="item">
+    <div class="item-head"><span class="eyebrow">Income ${idx+1}</span><button class="icon-btn" type="button" data-del="income" data-id="${i.id}">Remove</button></div>
     <div class="item-row">
       <label class="f"><span>Name</span><input type="text" id="inc-n-${i.id}" data-list="income" data-id="${i.id}" data-field="name" value="${esc(i.name)}" placeholder="e.g. Basic salary"></label>
-      <label class="f"><span>${g?'Monthly gross':'Monthly net'} (RM)</span><input type="text" inputmode="decimal" id="inc-a-${i.id}" data-list="income" data-id="${i.id}" data-field="amount" value="${esc(i.amount)}" placeholder="0.00"></label>
+      <label class="f"><span>${g?'Gross':'Net'} amount (RM)</span><input type="text" inputmode="decimal" id="inc-a-${i.id}" data-list="income" data-id="${i.id}" data-field="amount" value="${esc(i.amount)}" placeholder="0.00"></label>
     </div>
+    <div class="item-grid"><label class="f"><span>How often</span><select id="inc-f-${i.id}" data-list="income" data-id="${i.id}" data-field="freq">${opts}</select></label></div>
     <div class="item-foot">${g?`<label class="check-inline"><input type="checkbox" id="inc-e-${i.id}" data-list="income" data-id="${i.id}" data-field="epf" ${i.epf?'checked':''}>EPF deducted on this</label>`:'<span></span>'}
-      <button class="icon-btn" type="button" data-del="income" data-id="${i.id}">Remove</button></div></div>`).join('');
+      <span class="small muted num" data-inc-eq="${i.id}"></span></div></div>`}).join(''):'<p class="empty">No income added yet. Use the buttons below.</p>';
 }
 function fillSettings(){
   ['epfRate','socso','eis','pcb','otherDed','payday','emergency'].forEach(k=>{const el=$('#set-'+k);if(el&&document.activeElement!==el)el.value=state[k]==null?'':state[k]});
@@ -558,7 +571,11 @@ function fillSettings(){
   const ex=$('#extra-pay');if(document.activeElement!==ex)ex.value=state.extraPay==null?'':state.extraPay;
 }
 function renderIncomeTotals(m){
-  let h=`<div class="sumline"><span>${m.isGross?'Gross income':'Income'}</span><span class="num">${money(m.gross)}</span></div>`;
+  const srcs=state.income.filter(i=>monthlyOf(i)>0);
+  let h=srcs.map(i=>`<div class="sumline"><span class="muted">${esc(i.name||'Unnamed income')}${i.freq&&i.freq!=='monthly'?' ('+FREQ[i.freq][0].toLowerCase()+', per month)':''}</span><span class="num">${money(monthlyOf(i))}</span></div>`).join('')
+    +`<div class="sumline" style="font-weight:600"><span>${m.isGross?'Total gross income':'Total income'}</span><span class="num">${money(m.gross)}</span></div>`;
+  document.querySelectorAll('[data-inc-eq]').forEach(el=>{const i=state.income.find(x=>x.id===el.dataset.incEq);
+    el.textContent=i&&i.freq&&i.freq!=='monthly'&&num(i.amount)>0?'≈ '+money(monthlyOf(i))+' a month':''});
   if(m.isGross){h+=`<div class="sumline"><span class="muted">EPF (${num(state.epfRate)}%)</span><span class="num">−${money(m.epf).replace('−','')}</span></div>
     <div class="sumline"><span class="muted">SOCSO, EIS, PCB & other</span><span class="num">−${money(m.ded-m.epf).replace('−','')}</span></div>`}
   h+=`<div class="sumline total"><span>Take-home pay</span><span class="num">${money(m.net)}</span></div>`;
@@ -671,6 +688,7 @@ function renderAll(){renderIncome();renderCommit();fillSettings();renderLive()}
 
 $('#cat-chips').innerHTML=CATS.map((c,i)=>`<label class="chip"><input type="radio" name="cat" value="${esc(c)}" id="cat-${i}" ${i===0?'checked':''}><span>${esc(c)}</span></label>`).join('');
 $('#exp-date').value=ymd(todayDate());
+$('#income-presets').innerHTML=PRESETS.map((p,k)=>`<button class="preset" type="button" data-preset="${k}">+ ${esc(p[0])}</button>`).join('');
 
 /* ---------- Events ---------- */
 function findItem(t){const arr=t.dataset.list==='income'?state.income:state.commitments;return arr.find(x=>x.id===t.dataset.id)}
@@ -682,7 +700,8 @@ document.addEventListener('input',e=>{const t=e.target;
 });
 document.addEventListener('change',e=>{const t=e.target;
   if(t.dataset.list&&t.type==='checkbox'){const it=findItem(t);if(it){it.epf=t.checked;touched();renderLive()}return}
-  if(t.dataset.list&&t.tagName==='SELECT'){const it=findItem(t);if(it){it.type=t.value;touched();renderCommit();renderLive();const el=$('#c-t-'+it.id);if(el)el.focus()}return}
+  if(t.dataset.list&&t.tagName==='SELECT'){const it=findItem(t);if(it){it[t.dataset.field]=t.value;touched();
+    if(t.dataset.list==='income'){renderLive()}else{renderCommit();renderLive();const el=$('#c-t-'+it.id);if(el)el.focus()}}return}
   if(t.name==='mode'){state.mode=t.value;touched();renderIncome();renderLive()}
 });
 function showTab(name){
@@ -698,7 +717,9 @@ document.addEventListener('click',e=>{const t=e.target.closest('button');if(!t)r
     if(key==='income')renderIncome();else renderCommit();renderLive();return}
   if(t.dataset.delExp){state.expenses=state.expenses.filter(x=>x.id!==t.dataset.delExp);touched();renderLive();toast('Removed');return}
   if(t.dataset.addCommit){const c={id:uid(),name:'',type:t.dataset.addCommit,amount:'',due:'',balance:'',rate:''};state.commitments.push(c);touched();renderCommit();renderLive();const el=$('#c-n-'+c.id);if(el)el.focus();return}
-  if(t.id==='add-income'){const i={id:uid(),name:'',amount:'',epf:false};state.income.push(i);touched();renderIncome();renderLive();const el=$('#inc-n-'+i.id);if(el)el.focus();return}
+  if(t.dataset.preset!=null){const p=PRESETS[+t.dataset.preset];const i={id:uid(),name:p[0],amount:'',epf:p[1],freq:p[2]||'monthly'};
+    state.income.push(i);touched();renderIncome();renderLive();const el=$('#inc-a-'+i.id);if(el)el.focus();toast('Added '+p[0]+'. Enter the amount.');return}
+  if(t.id==='add-income'){const i={id:uid(),name:'',amount:'',epf:false,freq:'monthly'};state.income.push(i);touched();renderIncome();renderLive();const el=$('#inc-n-'+i.id);if(el)el.focus();return}
   if(t.id==='toggle-all'){showAll=!showAll;renderLive();return}
   if(t.id==='use-mine'){state=blankState();save();renderAll();showTab('income');toast('Example cleared. Start with your salary.');return}
   if(t.id==='copy-backup'){const txt=JSON.stringify(state);const box=$('#backup-box');box.value=txt;
